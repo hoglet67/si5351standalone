@@ -8,21 +8,19 @@
 #define DEFAULT_FREQ 32000000
 
 // Pin Assignments (for the Teensy 3.5 on the Breadboard)
+#define PIN_LCD_RS     2
+#define PIN_LCD_E      4
+#define PIN_LCD_D4     9
+#define PIN_LCD_D5    10
+#define PIN_LCD_D6    11
+#define PIN_LCD_D7    12
+#define PIN_BUTTON1   34
+#define PIN_BUTTON2   33
 
-#define PIN_LCD_RS  2
-#define PIN_LCD_E   4
-#define PIN_LCD_D4  9
-#define PIN_LCD_D5 10
-#define PIN_LCD_D6 11
-#define PIN_LCD_D7 12
-#define PIN_BUTTON1 34
-#define PIN_BUTTON2 33
-
-#define AUTO_DELAY 1000
-#define AUTO_RATE 100
+// Auto Repeat Parameters
+#define AUTO_DELAY  1000
+#define AUTO_RATE    100
 #define FREQ_STEP 100000
-
-typedef void (*callback_t)();
 
 Si5351 si5351;
 
@@ -90,8 +88,8 @@ void loop(void) {
     }
   } else {
     b1repeat = AUTO_DELAY;
-  }
-
+  }  
+  
   b2.read();
   if (b2.isPressed()) {
     if (b2.pressedFor(b2repeat)) {
@@ -100,7 +98,7 @@ void loop(void) {
     }
   } else {
     b2repeat = AUTO_DELAY;
-  }
+  }  
 
   if ( Serial.available() ) {
     char c = Serial.read();
