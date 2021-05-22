@@ -4,6 +4,7 @@
 #include <Wire.h>
 #include <LiquidCrystal.h>
 #include <EasyButton.h>
+#include <Encoder.h>
 
 #define DEFAULT_FREQ 32000000
 
@@ -14,6 +15,8 @@
 #define PIN_LCD_D5    10
 #define PIN_LCD_D6    11
 #define PIN_LCD_D7    12
+#define PIN_ROTARY_A  32
+#define PIN_ROTARY_B  31
 #define PIN_BUTTON1   34
 #define PIN_BUTTON2   33
 
@@ -35,6 +38,9 @@ int b1repeat = AUTO_DELAY;
 EasyButton b2(PIN_BUTTON2);
 int b2repeat = AUTO_DELAY;
 
+Encoder rotary(PIN_ROTARY_A, PIN_ROTARY_B);
+
+
 uint32_t freq;
 
 void print_frequency(uint32_t f) {
@@ -52,12 +58,18 @@ void set_frequency(uint32_t f) {
   }
 }
 
+void update_rotary() {
+    rotary.write(4 * freq / FREQ_STEP);
+}
+
 void b1Pressed() {
   set_frequency(freq - FREQ_STEP);
+  update_rotary();
 }
 
 void b2Pressed() {
   set_frequency(freq + FREQ_STEP);
+  update_rotary();
 }
 
 void handle_message(char *msg) {
@@ -76,10 +88,13 @@ void setup(void)
   lcd.print("Clock Generator");
   si5351.init(SI5351_CRYSTAL_LOAD_8PF, 0, 0);
   set_frequency(DEFAULT_FREQ);
+  update_rotary();
   si5351.drive_strength(SI5351_CLK1, SI5351_DRIVE_8MA);
 }
 
 void loop(void) {
+  uint32_t r;
+
   b1.read();
   if (b1.isPressed()) {
     if (b1.pressedFor(b1repeat)) {
@@ -99,6 +114,11 @@ void loop(void) {
   } else {
     b2repeat = AUTO_DELAY;
   }  
+
+  r = (rotary.read() / 4) * FREQ_STEP;
+  if (r != freq) {
+    set_frequency(r);
+  }
 
   if ( Serial.available() ) {
     char c = Serial.read();
