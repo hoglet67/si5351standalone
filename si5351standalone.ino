@@ -18,10 +18,6 @@
 #define PIN_BUTTON1   34
 #define PIN_BUTTON2   33
 
-// Auto Repeat Parameters
-//#define AUTO_DELAY  1000
-//#define AUTO_RATE    100
-
 Si5351 si5351;
 
 LiquidCrystal lcd(PIN_LCD_RS, PIN_LCD_E, PIN_LCD_D4, PIN_LCD_D5, PIN_LCD_D6, PIN_LCD_D7);
@@ -30,24 +26,37 @@ char buffer [256];
 char *msg = buffer;
 
 EasyButton b1(PIN_BUTTON1);
-//int b1repeat = AUTO_DELAY;
 
 EasyButton b2(PIN_BUTTON2);
-//int b2repeat = AUTO_DELAY;
 
 Encoder rotary(PIN_ROTARY_A, PIN_ROTARY_B);
 
 uint32_t freq[] = {
-  4000000,
-  1843200
+   4000000,
+   1843200,
+  50000000
 };
 
 int step[] = {
-  100000,
-  10000
+    100000,
+     10000,
+    100000
 };
 
+// Current channel
 unsigned int channel = 0;
+
+// Virtual display rows:
+//     0123456789012345
+// 0 - Clock Generator:   <<< top_row (upper position)
+// 1 - 0 XX.XXXXXX MHz    <<< top_row + NUM_ROWS - 1
+// 2 - 1>XX.XXXXXX MHz<   
+// 3 - 2 XX.XXXXXX MHz    <<< top_row (lower position)
+// 4 - (c) 2021 Hoglet    <<< top_row + NUM_ROWS - 1
+
+unsigned int top_row = 0;
+
+#define NUM_ROWS 2
 
 #define NUM_CHANNELS (sizeof(freq) / sizeof(uint32_t))
 
@@ -55,17 +64,34 @@ void print_frequency(unsigned int c) {
   char fstr[32];
   uint32_t f = freq[c];
   sprintf(fstr, "%2ld.%06ld MHz", f / 1000000, f % 1000000);
-  lcd.setCursor(2, c);
   lcd.print(fstr);
 }
 
 void update_display() {
-  for (unsigned int i = 0; i < NUM_CHANNELS; i++) {
-    lcd.setCursor(0, i);
-    lcd.print(i);
-    lcd.print((i == channel) ? '>' : ' ');
-    print_frequency(i);
-    lcd.print((i == channel) ? '<' : ' ');
+  // Ensure the current channel is visible at all times
+  if (top_row > channel + 1) {
+    // Window is too far down, so channel is off the top
+    // Position it so channel occpies the top physical row
+    top_row = channel + 1;
+  } else if (top_row < channel + 1 - (NUM_ROWS - 1)) {
+    // Window is too far up, so channel is off the bottom
+    // Position it so channel occpies the bottom physical row
+    top_row = channel + 1 - (NUM_ROWS - 1);
+  }
+  // Render NUM_ROWS virtual rows
+  for (unsigned int i = top_row; i < top_row + NUM_ROWS; i++) {
+    lcd.setCursor(0, i - top_row);
+    if (i == 0) {
+      lcd.print("Clock Generator ");
+    } else if (i > NUM_CHANNELS) {
+      lcd.print("(c) 2021 Hoglet "); 
+    } else {
+      unsigned int c = i - 1;
+      lcd.print(c);
+      lcd.print((c == channel) ? '>' : ' ');
+      print_frequency(c);
+      lcd.print((c == channel) ? '<' : ' ');
+    }
   }
 }
 
@@ -73,7 +99,6 @@ void set_frequency(unsigned int c, uint32_t f) {
   if (c >= 0 && c < NUM_CHANNELS && f >= 8000 && f < 100000000) {
     si5351.set_freq(f * 100ULL, (si5351_clock) c);
     freq[c] = f;
-    print_frequency(c);
   }
 }
 
@@ -84,16 +109,20 @@ void update_rotary() {
 void b1Pressed() {
   if (channel > 0) {
     channel--;
+    update_rotary();
+  } else {
+    top_row = 0;
   }
-  update_rotary();
   update_display();
 }
 
 void b2Pressed() {
   if (channel < NUM_CHANNELS - 1) {
     channel++;
+    update_rotary();
+  } else {
+    top_row = NUM_CHANNELS;
   }
-  update_rotary();
   update_display();
 }
 
@@ -106,14 +135,15 @@ void handle_message(char *msg) {
   } else {
     set_frequency(channel, atoi(msg));
   }
+  update_display();  
 }
 
 void setup(void)
 {
   b1.begin();
-  b1.onPressed(b1Pressed);
+  b1.onPressedFor(100, b1Pressed);
   b2.begin();
-  b2.onPressed(b2Pressed);
+  b2.onPressedFor(100, b2Pressed);
   lcd.begin(16, 2);
   si5351.init(SI5351_CRYSTAL_LOAD_8PF, 0, 0);
   for (unsigned int c = 0; c < NUM_CHANNELS; c++) {
@@ -131,29 +161,11 @@ void loop(void) {
   b1.read();
   b2.read();
 
-#if 0
-  if (b1.isPressed()) {
-    if (b1.pressedFor(b1repeat)) {
-      b1Pressed();
-      b1repeat += AUTO_RATE;
-    }
-  } else {
-    b1repeat = AUTO_DELAY;
-  }
-
-  if (b2.isPressed()) {
-    if (b2.pressedFor(b2repeat)) {
-      b2Pressed();
-      b2repeat += AUTO_RATE;
-    }
-  } else {
-    b2repeat = AUTO_DELAY;
-  }
-#endif
-
   r = (rotary.read() / 4) * step[channel];
   if (r != freq[channel]) {
     set_frequency(channel, r);
+    // TODO: optimise this case    
+    update_display();
   }
 
   if ( Serial.available() ) {
