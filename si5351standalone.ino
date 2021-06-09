@@ -6,8 +6,6 @@
 #include <EasyButton.h>
 #include <Encoder.h>
 
-#define DEFAULT_FREQ 32000000
-
 // Pin Assignments (for the Teensy 3.5 on the Breadboard)
 #define PIN_LCD_RS     2
 #define PIN_LCD_E      4
@@ -21,9 +19,8 @@
 #define PIN_BUTTON2   33
 
 // Auto Repeat Parameters
-#define AUTO_DELAY  1000
-#define AUTO_RATE    100
-#define FREQ_STEP 100000
+//#define AUTO_DELAY  1000
+//#define AUTO_RATE    100
 
 Si5351 si5351;
 
@@ -33,49 +30,82 @@ char buffer [256];
 char *msg = buffer;
 
 EasyButton b1(PIN_BUTTON1);
-int b1repeat = AUTO_DELAY;
+//int b1repeat = AUTO_DELAY;
 
 EasyButton b2(PIN_BUTTON2);
-int b2repeat = AUTO_DELAY;
+//int b2repeat = AUTO_DELAY;
 
 Encoder rotary(PIN_ROTARY_A, PIN_ROTARY_B);
 
+uint32_t freq[] = {
+  4000000,
+  1843200
+};
 
-uint32_t freq;
+int step[] = {
+  100000,
+  10000
+};
 
-void print_frequency(uint32_t f) {
+unsigned int channel = 0;
+
+#define NUM_CHANNELS (sizeof(freq) / sizeof(uint32_t))
+
+void print_frequency(unsigned int c) {
   char fstr[32];
-  sprintf(fstr, "%ld.%06ld MHz  ", f / 1000000, f % 1000000);
-  lcd.setCursor(0, 1);
+  uint32_t f = freq[c];
+  sprintf(fstr, "%2ld.%06ld MHz", f / 1000000, f % 1000000);
+  lcd.setCursor(2, c);
   lcd.print(fstr);
 }
 
-void set_frequency(uint32_t f) {
-  if (f >= 8000 && f <= 160000000) {
-    si5351.set_freq(f * 100ULL, SI5351_CLK1);
-    print_frequency(f);
-    freq = f;
+void update_display() {
+  for (unsigned int i = 0; i < NUM_CHANNELS; i++) {
+    lcd.setCursor(0, i);
+    lcd.print(i);
+    lcd.print((i == channel) ? '>' : ' ');
+    print_frequency(i);
+    lcd.print((i == channel) ? '<' : ' ');
+  }
+}
+
+void set_frequency(unsigned int c, uint32_t f) {
+  if (c >= 0 && c < NUM_CHANNELS && f >= 8000 && f < 100000000) {
+    si5351.set_freq(f * 100ULL, (si5351_clock) c);
+    freq[c] = f;
+    print_frequency(c);
   }
 }
 
 void update_rotary() {
-    rotary.write(4 * freq / FREQ_STEP);
+  rotary.write(4 * freq[channel] / step[channel]);
 }
 
 void b1Pressed() {
-  set_frequency(freq - FREQ_STEP);
+  if (channel > 0) {
+    channel--;
+  }
   update_rotary();
+  update_display();
 }
 
 void b2Pressed() {
-  set_frequency(freq + FREQ_STEP);
+  if (channel < NUM_CHANNELS - 1) {
+    channel++;
+  }
   update_rotary();
+  update_display();
 }
 
 void handle_message(char *msg) {
   Serial.print("Si5351 received message: " );
   Serial.println(msg);
-  set_frequency(atoi(msg));
+  // Format is <number> or <channel>:<number>
+  if (msg[1] == ':') {
+    set_frequency(msg[0] - '0', atoi(msg + 2));
+  } else {
+    set_frequency(channel, atoi(msg));
+  }
 }
 
 void setup(void)
@@ -85,17 +115,23 @@ void setup(void)
   b2.begin();
   b2.onPressed(b2Pressed);
   lcd.begin(16, 2);
-  lcd.print("Clock Generator");
   si5351.init(SI5351_CRYSTAL_LOAD_8PF, 0, 0);
-  set_frequency(DEFAULT_FREQ);
+  for (unsigned int c = 0; c < NUM_CHANNELS; c++) {
+    set_frequency(c, freq[c]);
+    si5351.drive_strength((si5351_clock) c, SI5351_DRIVE_8MA);
+  }
+  channel = 0;
   update_rotary();
-  si5351.drive_strength(SI5351_CLK1, SI5351_DRIVE_8MA);
+  update_display();
 }
 
 void loop(void) {
   uint32_t r;
 
   b1.read();
+  b2.read();
+
+#if 0
   if (b1.isPressed()) {
     if (b1.pressedFor(b1repeat)) {
       b1Pressed();
@@ -103,9 +139,8 @@ void loop(void) {
     }
   } else {
     b1repeat = AUTO_DELAY;
-  }  
-  
-  b2.read();
+  }
+
   if (b2.isPressed()) {
     if (b2.pressedFor(b2repeat)) {
       b2Pressed();
@@ -113,11 +148,12 @@ void loop(void) {
     }
   } else {
     b2repeat = AUTO_DELAY;
-  }  
+  }
+#endif
 
-  r = (rotary.read() / 4) * FREQ_STEP;
-  if (r != freq) {
-    set_frequency(r);
+  r = (rotary.read() / 4) * step[channel];
+  if (r != freq[channel]) {
+    set_frequency(channel, r);
   }
 
   if ( Serial.available() ) {
