@@ -61,10 +61,14 @@ unsigned int top_row = 0;
 #define NUM_CHANNELS (sizeof(freq) / sizeof(uint32_t))
 
 void print_frequency(unsigned int c) {
-  char fstr[32];
   uint32_t f = freq[c];
-  sprintf(fstr, "%2ld.%06ld MHz", f / 1000000, f % 1000000);
-  lcd.print(fstr);
+  if (f == 0) {
+    lcd.print("Off          ");
+  } else {
+    char fstr[32];
+    sprintf(fstr, "%2ld.%06ld MHz", f / 1000000, f % 1000000);
+    lcd.print(fstr);
+  }
 }
 
 void update_display() {
@@ -96,8 +100,17 @@ void update_display() {
 }
 
 void set_frequency(unsigned int c, uint32_t f) {
-  if (c >= 0 && c < NUM_CHANNELS && f >= 8000 && f < 100000000) {
-    si5351.set_freq(f * 100ULL, (si5351_clock) c);
+  if (c >= 0 && c < NUM_CHANNELS && f >= 0 && f < 160000000) {
+    if (f == 0) {
+      if (freq[c] > 0) {
+        si5351.output_enable((si5351_clock) c, 0);
+      }
+    } else {
+      if (freq[c] == 0) {
+        si5351.output_enable((si5351_clock) c, 1);
+      }
+      si5351.set_freq(f * 100ULL, (si5351_clock) c);
+    }
     freq[c] = f;
   }
 }
@@ -156,13 +169,20 @@ void setup(void)
 }
 
 void loop(void) {
-  uint32_t r;
+  int r;
 
   b1.read();
   b2.read();
 
   r = (rotary.read() / 4) * step[channel];
-  if (r != freq[channel]) {
+  if (r < 0) {
+    rotary.write(0);
+    r = 0;
+  } else if (r > 99000000) {
+    rotary.write(4 * r / step[channel]);
+    r = 99000000;
+  }
+  if (((uint32_t) r) != freq[channel]) {
     set_frequency(channel, r);
     // TODO: optimise this case    
     update_display();
