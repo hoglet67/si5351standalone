@@ -50,7 +50,7 @@ unsigned int channel = 0;
 //     0123456789012345
 // 0 - Clock Generator:   <<< top_row (upper position)
 // 1 - 0 XX.XXXXXX MHz    <<< top_row + NUM_ROWS - 1
-// 2 - 1>XX.XXXXXX MHz<   
+// 2 - 1>XX.XXXXXX MHz<
 // 3 - 2 XX.XXXXXX MHz    <<< top_row (lower position)
 // 4 - (c) 2021 Hoglet    <<< top_row + NUM_ROWS - 1
 
@@ -88,7 +88,7 @@ void update_display() {
     if (i == 0) {
       lcd.print("Clock Generator ");
     } else if (i > NUM_CHANNELS) {
-      lcd.print("(c) 2021 Hoglet "); 
+      lcd.print("(c) 2021 Hoglet ");
     } else {
       unsigned int c = i - 1;
       lcd.print(c);
@@ -148,7 +148,7 @@ void handle_message(char *msg) {
   } else {
     set_frequency(channel, atoi(msg));
   }
-  update_display();  
+  update_display();
 }
 
 void setup(void)
@@ -184,7 +184,7 @@ void loop(void) {
   }
   if (((uint32_t) r) != freq[channel]) {
     set_frequency(channel, r);
-    // TODO: optimise this case    
+    // TODO: optimise this case
     update_display();
   }
 
