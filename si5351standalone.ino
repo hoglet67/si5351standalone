@@ -71,7 +71,8 @@ unsigned int channel = 0;
 // 3 - 2 XX.XXXXXX MHz    <<< top_row (lower position)
 // 4 - (c) 2021 Hoglet    <<< top_row + NUM_ROWS - 1
 
-unsigned int top_row = 0;
+// Current position of the visible window
+unsigned int top_row = 1;
 
 #define NUM_ROWS 2
 
